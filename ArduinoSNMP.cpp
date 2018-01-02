@@ -18,10 +18,13 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "ArduinoSNMP.h"
-#include <EthernetUdp.h>
+//Modified by Alan T
 
-EthernetUDP Udp;
+#include "ArduinoSNMP.h"
+//#include <EthernetUdp.h>
+#include <WiFiUdp.h>
+
+WiFiUDP Udp;
 
 SNMP_API_STAT_CODES SNMPClass::begin(char *getCommName,
         char *setCommName, char *trapCommName, uint16_t port)
@@ -252,6 +255,12 @@ SNMP_API_STAT_CODES SNMPClass::requestPdu(SNMP_PDU *pdu, char *extra_data, int e
 		pdu->error = SNMP_ERR_NO_SUCH_NAME;
 		return SNMP_API_STAT_NO_SUCH_NAME;
 	}
+	
+  } else if ( pdu->type == SNMP_PDU_GET_NEXT) {
+	  if(memcmp(_getCommName,_packet+verEnd+3,comLen) != 0 && memcmp(_setCommName,_packet+verEnd+3,comLen) != 0){
+		  pdu->error = SNMP_ERR_NO_SUCH_NAME;
+		  return SNMP_API_STAT_NO_SUCH_NAME;
+	  }
   } else {
     // set pdu error
     pdu->error = SNMP_ERR_NO_SUCH_NAME;
@@ -367,7 +376,7 @@ SNMP_API_STAT_CODES SNMPClass::sendTrapv1(SNMP_PDU *pdu, SNMP_TRAP_TYPES trap_ty
   _packetPos += value.size;
   
   //Time Ticks
-  value.encode(SNMP_SYNTAX_TIME_TICKS, millis()/10, _packet + _packetPos);
+  value.encode(SNMP_SYNTAX_TIME_TICKS, (uint32) millis()/10, _packet + _packetPos);
   _packetPos +=6;//syntax + length + 4 octets
 
   //unknown
@@ -412,8 +421,12 @@ uint16_t SNMPClass::writeHeaders(SNMP_PDU *pdu)
   
   //start of header
   //length of all data after this point
-  _packet[_packetPos--] = lsb(packet_length()+_extra_data_size);
-  _packet[_packetPos--] = msb(packet_length()+_extra_data_size);
+    //length value of all previous data
+    //CHanged 1/16/2017 Alan T. Length 1 too long.
+    //Possibly the ESP8266 complier is decrementing at the wrong time?
+  uint16_t pktlen=packet_length();
+  _packet[_packetPos--] = lsb(pktlen+_extra_data_size);
+  _packet[_packetPos--] = msb(pktlen+_extra_data_size);
   _packet[_packetPos--] = 0x82;//Sending length in two octets
 
   _packet[_packetPos--] = (byte)SNMP_SYNTAX_SEQUENCE;
@@ -497,8 +510,11 @@ SNMP_API_STAT_CODES SNMPClass::responsePdu(SNMP_PDU *pdu, IPAddress to_address, 
   _packet[_packetPos--] = (byte)SNMP_SYNTAX_INT;// type
 
   //length value of all previous data
-  _packet[_packetPos--] = lsb(packet_length()+_extra_data_size);
-  _packet[_packetPos--] = msb(packet_length()+_extra_data_size);
+  //CHanged 1/16/2017 Alan T. Length 1 too long. 
+  //Possibly the ESP8266 complier is decrementing at the wrong time?
+  uint16_t pktlen=packet_length();
+  _packet[_packetPos--] = lsb(pktlen+_extra_data_size);
+  _packet[_packetPos--] = msb(pktlen+_extra_data_size);
   _packet[_packetPos--] = 0x82;//Sending length in two octets
     
   // SNMP PDU type

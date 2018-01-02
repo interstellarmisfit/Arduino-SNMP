@@ -34,6 +34,8 @@
 #include "Arduino.h"
 #include "Udp.h"
 
+const char DOT[] PROGMEM=".";
+
 extern "C" {
   // callback function
   typedef void (*onPduReceiveCallback)(void);
@@ -171,7 +173,7 @@ typedef enum SNMP_SYNTAXES {
 };
 
 typedef struct SNMP_OID {
-  unsigned int data[SNMP_MAX_OID_LEN];  // ushort array insted??
+  unsigned int data[SNMP_MAX_OID_LEN];  // ushort array instead??
   size_t size;
   
   /**
@@ -280,8 +282,10 @@ typedef struct SNMP_OID {
     
     byte b_size = strlen(buffer);
     byte n = 0;
+	char t[6];
+	
     for(byte i = 0; i <= b_size; i++){
-      char t[6];
+      //char t[6]; AAT Moved outside of loop. Was getting reinitialized
       if(buffer[i] == '.' || n == 5 || buffer[i] == '\0'){
         t[n] = '\0';
         data[size++] = atoi(t);
@@ -299,8 +303,10 @@ typedef struct SNMP_OID {
       
       byte b_size = strlen_P(buffer);
       byte n = 0;
+	  char t[6];
+	  
       for(byte i = 0; i <= b_size; i++){
-        char t[6];
+        //char t[6]; AAT Moved outside of loop. Was getting reinitialized
         if(pgm_read_byte(buffer+i) == '.' || n == 5 || pgm_read_byte(buffer+i) == '\0'){
           t[n] = '\0';
           data[size++] = atoi(t);
@@ -332,7 +338,11 @@ typedef struct SNMP_OID {
       
       if(strlen(buffer) + strlen(buff) + 1 < buffer_length){
         if(i != 0){
-          strcat_P(buffer, PSTR("."));
+			//Commented out 2/4/2017 aat. Unable to use PROGMEM anywhere else with PSTR.
+			//The DOT progmem declaration works. However do we really need to save space for one character?
+          //strcat_P(buffer, PSTR("."));
+		  //strcat_P(buffer, DOT);
+		  strcat(buffer,".");
         }
         strcat(buffer, buff);
       }else{
@@ -956,7 +966,7 @@ typedef struct SNMP_PDU {
     t_v->OID.clear();
     t_v->clear();
     t_v->OID.fromString("1.3.6.1.2.1.1.3.0");//OID of the value type being sent
-    t_v->encode(SNMP_SYNTAX_TIME_TICKS, millis()/10);
+    t_v->encode(SNMP_SYNTAX_TIME_TICKS, (uint32)millis()/10);
     value.size = add_data(t_v);
     
     //SNMPv2 trapOID
@@ -1008,9 +1018,13 @@ typedef struct SNMP_PDU {
         buffer[index--] = temp_buffer[i];
       }
 
+	  //Added 1/16/2017 Alan T
+	  //Length was 1 to large.
+	  int indexnow=index;
+	
       //length of remainder of value
-      buffer[index--] = lsb(start_index - index + extra_data_size);
-      buffer[index--] = msb(start_index - index + extra_data_size);
+      buffer[index--] = lsb(start_index - indexnow + extra_data_size);
+      buffer[index--] = msb(start_index - indexnow + extra_data_size);
       buffer[index--] = 0x82;//Sending length in two octets
       buffer[index--] = SNMP_SYNTAX_SEQUENCE;  
       
